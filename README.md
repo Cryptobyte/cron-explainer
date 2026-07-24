@@ -2,6 +2,8 @@
 
 An MCP server that turns a cron expression into plain English and into real timestamps. It reads POSIX, Quartz and AWS EventBridge syntax, states which dialect it used, and is deliberately rigorous about the three things people get wrong: the day-of-month / day-of-week rule (cron ORs those two fields, it does not AND them), daylight saving time (jobs that silently never run, and jobs that quietly run twice), and impossible schedules such as 30 February. It is pure computation with no dependencies beyond the MCP SDK itself, and it never opens a network connection.
 
+[![MCP Commons](https://mcpcommons.com/badge/cron-explainer.svg)](https://mcpcommons.com/listing/cron-explainer)
+
 Developed for demo on [MCP Commons](https://mcpcommons.com) an MCP marketplace for free and paid MCP servers. See [Deploy Scripts](/.github/) for an auto deploy script example.
 
 ---
