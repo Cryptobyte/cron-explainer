@@ -1,0 +1,91 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cron-explainer"
+version = "1.0.0"
+description = "An MCP server that explains cron expressions and computes their run times, including the day-of-month rule and daylight saving edge cases."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Cron Explainer contributors" }]
+keywords = ["cron", "scheduling", "devops", "timezones", "mcp", "crontab", "quartz", "dst"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Utilities",
+    "Typing :: Typed",
+]
+dependencies = ["mcp>=1.2.0"]
+
+[project.urls]
+Homepage = "https://github.com/cryptobyte/cron-explainer"
+Repository = "https://github.com/cryptobyte/cron-explainer"
+Issues = "https://github.com/cryptobyte/cron-explainer/issues"
+Changelog = "https://github.com/cryptobyte/cron-explainer/blob/main/CHANGELOG.md"
+
+[project.scripts]
+cron-explainer = "cron_explainer.server:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.11"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cron_explainer"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "README.md", "LICENSE", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+filterwarnings = ["error"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF", "PIE", "RET"]
+ignore = [
+    "RET504",  # a named return value is often clearer
+    "SIM108",  # ternaries are not always more readable
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["cron_explainer"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src", "tests"]
+strict = true
+warn_unreachable = true
+disallow_untyped_decorators = false
+pretty = true
+
+[[tool.mypy.overrides]]
+module = "mcp.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# The decorators the MCP SDK exposes are typed differently across SDK versions,
+# so the ignores on them are needed with some releases and redundant with
+# others. Either way the module itself stays strictly typed.
+module = "cron_explainer.server"
+warn_unused_ignores = false

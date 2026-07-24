@@ -1,0 +1,66 @@
+name: Publish to MCP Commons
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Submit the release for review
+        env:
+          MCPC_API_KEY: ${{ secrets.MCPC_API_KEY }}
+          SLUG: cron-explainer
+          REPO: ${{ github.repository }}
+          REF: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          # The tools array is required. A submission without it is rejected,
+          # and one with an empty list would wipe the declared surface, so it is
+          # built here rather than being derived from anything that could be
+          # empty at runtime. Keep these names identical to the ones registered
+          # in src/cron_explainer/server.py.
+          BODY=$(cat <<JSON
+          {
+            "version": "$VERSION",
+            "repo": "https://github.com/$REPO",
+            "ref": "$REF",
+            "language": "python",
+            "transport": "stdio",
+            "entrypoint": "src/cron_explainer/server.py",
+            "egress_allowlist": [],
+            "tools": [
+              { "name": "explain_cron", "description": "Describe a cron expression in plain English" },
+              { "name": "next_runs", "description": "Next N run times for a cron expression" },
+              { "name": "previous_runs", "description": "Previous N run times for a cron expression" },
+              { "name": "validate_cron", "description": "Validate a cron expression with precise errors" },
+              { "name": "describe_schedule_stats", "description": "Frequency and gap analysis for a schedule" },
+              { "name": "check_dst_safety", "description": "Find runs skipped or repeated across DST" },
+              { "name": "compare_crons", "description": "Compare two expressions and find overlaps" },
+              { "name": "explain_special", "description": "Explain @daily, @reboot and other macros" }
+            ]
+          }
+          JSON
+          )
+
+          # Fail before publishing if the body is not valid JSON or has lost its
+          # tool list, rather than sending a submission that would be rejected.
+          echo "$BODY" | python3 -c '
+          import json, sys
+          body = json.load(sys.stdin)
+          assert body["tools"], "the tools array must not be empty"
+          assert body["version"], "the version must not be empty"
+          print(f"Submitting {len(body[\"tools\"])} tools for version {body[\"version\"]}")
+          '
+
+          RESPONSE=$(mktemp)
+          STATUS=$(curl -sS -o "$RESPONSE" -w '%{http_code}' \
+            -X POST "https://mcpcommons.com/api/v1/tools/$SLUG/versions" \
+            -H "Authorization: Bearer $MCPC_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$BODY")
+          cat "$RESPONSE"
+          [ "$STATUS" = "202" ] || { echo "::error::Rejected (HTTP $STATUS)"; exit 1; }
