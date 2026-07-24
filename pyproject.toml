@@ -30,10 +30,10 @@ classifiers = [
 dependencies = ["mcp>=1.2.0"]
 
 [project.urls]
-Homepage = "https://github.com/cryptobyte/cron-explainer"
-Repository = "https://github.com/cryptobyte/cron-explainer"
-Issues = "https://github.com/cryptobyte/cron-explainer/issues"
-Changelog = "https://github.com/cryptobyte/cron-explainer/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/Cryptobyte/cron-explainer"
+Repository = "https://github.com/Cryptobyte/cron-explainer"
+Issues = "https://github.com/Cryptobyte/cron-explainer/issues"
+Changelog = "https://github.com/Cryptobyte/cron-explainer/blob/main/CHANGELOG.md"
 
 [project.scripts]
 cron-explainer = "cron_explainer.server:main"

@@ -58,7 +58,7 @@ jobs:
           cat > "$PAYLOAD" <<JSON
           {
             "version": "$VERSION",
-            "repo": "https://github.com/$REPO",
+            "repo": "$REPO",
             "ref": "$REF",
             "language": "python",
             "transport": "stdio",
@@ -92,6 +92,9 @@ jobs:
               raise SystemExit("::error::The tools array is empty, which would wipe the listing.")
           if not body.get("version"):
               raise SystemExit("::error::The version is empty.")
+          # The API wants owner/repo here, not a URL.
+          if not re.fullmatch(r"[\w.-]+/[\w.-]+", body.get("repo", "")):
+              raise SystemExit(f"::error::repo must be owner/repo, got {body.get('repo')!r}.")
 
           declared = {tool["name"] for tool in body["tools"]}
 

@@ -51,7 +51,7 @@ cron-explainer
 ```
 
 ```bash
-git clone https://github.com/cryptobyte/cron-explainer
+git clone https://github.com/Cryptobyte/cron-explainer
 cd cron-explainer
 pip install -e .
 cron-explainer
@@ -264,7 +264,7 @@ One documented behaviour worth knowing: the day rule follows Vixie cron exactly.
 ## Development
 
 ```bash
-git clone https://github.com/cryptobyte/cron-explainer
+git clone https://github.com/Cryptobyte/cron-explainer
 cd cron-explainer
 pip install -e ".[dev]"
 pytest
