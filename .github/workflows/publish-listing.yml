@@ -3,27 +3,59 @@ name: Publish to MCP Commons
 on:
   release:
     types: [published]
+  # Lets a failed or superseded submission be resent without cutting a new
+  # release. Pass the tag to publish, for example v1.0.0.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish, for example v1.0.0"
+        required: true
+        type: string
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Work out which tag is being published
+        id: target
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          TAG="${INPUT_TAG:-$GITHUB_REF_NAME}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "Publishing tag $TAG as version ${TAG#v}"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.target.outputs.tag }}
+
       - name: Submit the release for review
         env:
           MCPC_API_KEY: ${{ secrets.MCPC_API_KEY }}
           SLUG: cron-explainer
           REPO: ${{ github.repository }}
-          REF: ${{ github.sha }}
+          VERSION: ${{ steps.target.outputs.version }}
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
+
+          if [ -z "${MCPC_API_KEY:-}" ]; then
+            echo "::error::The MCPC_API_KEY secret is not set on this repository."
+            exit 1
+          fi
+
+          # The tag is checked out, so this is the exact commit being listed.
+          REF="$(git rev-parse HEAD)"
 
           # The tools array is required. A submission without it is rejected,
           # and one with an empty list would wipe the declared surface, so it is
-          # built here rather than being derived from anything that could be
-          # empty at runtime. Keep these names identical to the ones registered
-          # in src/cron_explainer/server.py.
-          BODY=$(cat <<JSON
+          # written out literally here rather than derived from anything that
+          # could come back empty. Keep these names identical to the ones
+          # registered in src/cron_explainer/server.py; the step below fails the
+          # job if they ever drift apart.
+          PAYLOAD="$(mktemp)"
+          cat > "$PAYLOAD" <<JSON
           {
             "version": "$VERSION",
             "repo": "https://github.com/$REPO",
@@ -44,23 +76,53 @@ jobs:
             ]
           }
           JSON
-          )
 
-          # Fail before publishing if the body is not valid JSON or has lost its
-          # tool list, rather than sending a submission that would be rejected.
-          echo "$BODY" | python3 -c '
-          import json, sys
-          body = json.load(sys.stdin)
-          assert body["tools"], "the tools array must not be empty"
-          assert body["version"], "the version must not be empty"
-          print(f"Submitting {len(body[\"tools\"])} tools for version {body[\"version\"]}")
-          '
+          # Check the submission before sending it: valid JSON, a non empty tool
+          # list and version, and a declared surface that matches the server.
+          # The heredoc is quoted so the shell leaves this script alone.
+          PAYLOAD_FILE="$PAYLOAD" python3 <<'PY'
+          import json
+          import os
+          import re
 
-          RESPONSE=$(mktemp)
-          STATUS=$(curl -sS -o "$RESPONSE" -w '%{http_code}' \
+          with open(os.environ["PAYLOAD_FILE"], encoding="utf-8") as handle:
+              body = json.load(handle)
+
+          if not body.get("tools"):
+              raise SystemExit("::error::The tools array is empty, which would wipe the listing.")
+          if not body.get("version"):
+              raise SystemExit("::error::The version is empty.")
+
+          declared = {tool["name"] for tool in body["tools"]}
+
+          with open("src/cron_explainer/server.py", encoding="utf-8") as handle:
+              source = handle.read()
+          registered = set(re.findall(r'^\s{4}"(\w+)": tool_\w+,$', source, re.MULTILINE))
+
+          if declared != registered:
+              missing = sorted(registered - declared)
+              extra = sorted(declared - registered)
+              raise SystemExit(
+                  "::error::The declared tools do not match the server. "
+                  f"Missing from the listing: {missing}. Not in the code: {extra}."
+              )
+
+          version = body["version"]
+          count = len(declared)
+          print(f"Submitting {count} tools for version {version}")
+          PY
+
+          RESPONSE="$(mktemp)"
+          STATUS="$(curl -sS -o "$RESPONSE" -w '%{http_code}' \
             -X POST "https://mcpcommons.com/api/v1/tools/$SLUG/versions" \
             -H "Authorization: Bearer $MCPC_API_KEY" \
             -H "Content-Type: application/json" \
-            -d "$BODY")
+            --data-binary @"$PAYLOAD")" || {
+              echo "::error::Could not reach mcpcommons.com."
+              exit 1
+            }
+
           cat "$RESPONSE"
+          echo
           [ "$STATUS" = "202" ] || { echo "::error::Rejected (HTTP $STATUS)"; exit 1; }
+          echo "Submitted version $VERSION for review."
